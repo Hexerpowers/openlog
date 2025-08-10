@@ -2,12 +2,13 @@
 line-length = 100
 
 [build-system]
-requires = ["setuptools>=61.0.0", "wheel"]
+requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "openlog"
-version = "1.0.0"
+version = "1.2.0"
+requires-python = ">=3.9"
 description = "Open-source minimal Rich-based logging solution"
 readme = "README.md"
 authors = [{ name = "Hexerpowers", email = "hexerpowers@gmail.com" }]
@@ -19,9 +20,12 @@ classifiers = [
 keywords = ["logs", "file-logging"]
 dependencies = [
     "rich",
+    "setuptools>=68",
+    "tomli>=2.2.1",
     'tomli; python_version < "3.11"',
+    "wheel>=0.45.1",
 ]
-requires-python = ">=3.9"
+
 
 [project.optional-dependencies]
 dev = ["black", "bumpver", "isort", "pip-tools", "pytest"]
@@ -30,7 +34,7 @@ dev = ["black", "bumpver", "isort", "pip-tools", "pytest"]
 Homepage = "https://github.com/Hexerpowers/openlog"
 
 [tool.bumpver]
-current_version = "1.0.0"
+current_version = "1.2.0"
 version_pattern = "MAJOR.MINOR.PATCH"
 commit_message = "Bump version {old_version} -> {new_version}"
 commit = true

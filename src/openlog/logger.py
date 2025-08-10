@@ -14,22 +14,30 @@ class Logger:
     (INFO, ERROR, WARN, INIT) and can maintain logs in memory for later retrieval.
     """
 
-    def __init__(self, in_dir: bool = False, session: bool = False, write_to_file: bool = False):
+    def __init__(self, write_to_file: bool = False, in_dir: bool = False, session: bool = False, prefix: str = "", short_timestamp: bool = False):
         """
         Initialize a new Logger instance.
 
         Parameters:
+            write_to_file (bool, optional): If True, writes logs to file in addition to
+                                           console output. Defaults to False.
             in_dir (bool, optional): If True, logs will be stored in a '/logs' directory.
+                                    Only takes effect when write_to_file is True.
                                     Defaults to False.
             session (bool, optional): If True, creates a unique log file for each session
                                      with timestamp in the filename. If False, uses a single
-                                     'log.txt' file. Defaults to False.
-            write_to_file (bool, optional): If True, writes logs to file in addition to
-                                           console output. Defaults to False.
+                                     'log.txt' file. Only takes effect when write_to_file is True.
+                                     Defaults to False.
+            prefix (str, optional): A prefix to add before each log message. Defaults to "".
+            short_timestamp (bool, optional): If True, uses short timestamp format (HH:MM).
+                                             If False, uses full timestamp format (YYYY-MM-DD HH:MM:SS).
+                                             Defaults to False.
         """
         self.cls = Console()
 
         self.write_to_file = write_to_file
+        self.prefix = prefix
+        self.short_timestamp = short_timestamp
 
         self.in_dir = in_dir
         self.path_prefix = ""
@@ -73,15 +81,20 @@ class Logger:
         file = open(self.log_file_path, mode, encoding="utf-8")
         return file
 
-    @staticmethod
-    def _make_timestamp_string() -> str:
+    def _make_timestamp_string(self) -> str:
         """
         Creates a formatted timestamp string for log entries.
 
         Returns:
-            str: Current timestamp as a string in the format 'YYYY-MM-DD HH:MM:SS'.
+            str: Current timestamp as a string. Format depends on short_timestamp setting:
+                 - If short_timestamp is True: 'HH:MM'
+                 - If short_timestamp is False: 'YYYY-MM-DD HH:MM:SS'
         """
-        return str(datetime.now()).split(".")[0]
+        timestamp = str(datetime.now()).split(".")[0]
+        if self.short_timestamp:
+            time_part = timestamp.split(" ")[1]  # Get the time part (HH:MM:SS)
+            return ":".join(time_part.split(":")[:2])  # Return only HH:MM
+        return timestamp
 
     def _echo(self, msg: str, m_type: str) -> None:
         """
@@ -98,7 +111,10 @@ class Logger:
             None
         """
         if self.write_to_file:
-            bare_log_string = f"[{self._make_timestamp_string()}]::{m_type}::{msg}\n"
+            if self.prefix:
+                bare_log_string = f"[{self._make_timestamp_string()}]::[{self.prefix}]::{m_type}::{msg}\n"
+            else:
+                bare_log_string = f"[{self._make_timestamp_string()}]::{m_type}::{msg}\n"
 
             log_file = self._open_log_file()
             log_file.write(bare_log_string)
@@ -118,9 +134,14 @@ class Logger:
         else:
             color_code = "white bold"
 
-        self.cls.print(
-            f"[gray][{self._make_timestamp_string()}][/][red bold]::[/][{color_code}]{m_type}[/][red bold]::[/]{msg}"
-        )
+        if self.prefix:
+            self.cls.print(
+                f"[gray][{self._make_timestamp_string()}][/][red bold]::[/][green bold][{self.prefix}][/][red bold]::[/][{color_code}]{m_type}[/][red bold]::[/]{msg}"
+            )
+        else:
+            self.cls.print(
+                f"[gray][{self._make_timestamp_string()}][/][red bold]::[/][{color_code}]{m_type}[/][red bold]::[/]{msg}"
+            )
 
     def log(self, msg: str):
         """

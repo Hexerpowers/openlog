@@ -1,7 +1,13 @@
-import os
-from datetime import datetime
+from typing import Any
 
 from rich.console import Console
+
+from .core.batch import MessageBatch
+from .core.file_handler import FileHandler
+from .core.formatter import MessageFormatter
+from .core.object_formatter import ObjectFormatter
+from .core.text_wrapper import TextWrapper
+from .core.timestamp import TimestampManager
 
 
 class Logger:
@@ -14,7 +20,8 @@ class Logger:
     (INFO, ERROR, WARN, INIT) and can maintain logs in memory for later retrieval.
     """
 
-    def __init__(self, write_to_file: bool = False, in_dir: bool = False, session: bool = False, prefix: str = "", short_timestamp: bool = False):
+    def __init__(self, write_to_file: bool = False, in_dir: bool = False,
+                 session: bool = False, prefix: str = "", short_timestamp: bool = False):
         """
         Initialize a new Logger instance.
 
@@ -35,161 +42,215 @@ class Logger:
         """
         self.cls = Console()
 
-        self.write_to_file = write_to_file
-        self.prefix = prefix
-        self.short_timestamp = short_timestamp
+        # Initialize core components
+        self.timestamp_manager = TimestampManager(short_format=short_timestamp)
+        self.file_handler = FileHandler(
+            write_to_file=write_to_file,
+            in_dir=in_dir,
+            session=session,
+            timestamp_manager=self.timestamp_manager
+        )
+        self.formatter = MessageFormatter(
+            prefix=prefix,
+            timestamp_manager=self.timestamp_manager
+        )
+        self.object_formatter = ObjectFormatter(self.cls)
 
-        self.in_dir = in_dir
-        self.path_prefix = ""
-        if self.in_dir:
-            self.path_prefix = "/logs"
-            if not os.path.isdir(f"{os.getcwd()}/logs"):
-                if self.write_to_file:
-                    os.mkdir(f"{os.getcwd()}/logs")
-
-        self.session = session
-        if self.session:
-            self.log_file_path = (
-                os.getcwd()
-                + self.path_prefix
-                + "/log_"
-                + str(datetime.now()).replace(" ", "_").replace(":", "-")
-                + ".txt"
-            )
-        else:
-            self.log_file_path = os.getcwd() + self.path_prefix + "/log.txt"
-
+        # Log storage for flush functionality
         self.log_list = []
         self.log_list_to_send = []
-        if self.write_to_file:
-            log_file = self._open_log_file(mode="w+")
-            log_file.write(
-                f"-----------------------{self._make_timestamp_string()}-----------------------\n"
-            )
-            log_file.close()
 
-    def _open_log_file(self, mode: str = "a+"):
+        # Batch functionality
+        self.batch = MessageBatch()
+
+    def _process_message(self, msg: Any) -> str:
         """
-        Opens the log file with the specified mode.
+        Process message, converting objects to appropriate string representation.
 
         Parameters:
-            mode (str, optional): The file opening mode. Defaults to "a+" (append and read).
+            msg: Message to process (can be string or any object).
 
         Returns:
-            file: The opened file object.
+            str: Processed message string.
         """
-        file = open(self.log_file_path, mode, encoding="utf-8")
-        return file
+        if isinstance(msg, str):
+            return msg
 
-    def _make_timestamp_string(self) -> str:
-        """
-        Creates a formatted timestamp string for log entries.
+        # Get console width and calculate available space for message
+        console_width = self.cls.size.width
 
-        Returns:
-            str: Current timestamp as a string. Format depends on short_timestamp setting:
-                 - If short_timestamp is True: 'HH:MM'
-                 - If short_timestamp is False: 'YYYY-MM-DD HH:MM:SS'
-        """
-        timestamp = str(datetime.now()).split(".")[0]
-        if self.short_timestamp:
-            time_part = timestamp.split(" ")[1]  # Get the time part (HH:MM:SS)
-            return ":".join(time_part.split(":")[:2])  # Return only HH:MM
-        return timestamp
+        # Calculate actual prefix length more accurately
+        # Create a temporary prefix to measure its visual length
+        temp_prefix, _, visual_prefix_length = self.formatter.format_for_console("INFO")
 
-    def _echo(self, msg: str, m_type: str) -> None:
+        # Calculate available width after service part
+        available_width = console_width - visual_prefix_length
+
+        # Ensure we have reasonable minimum width
+        if available_width < 20:
+            available_width = 80
+
+        # Check if object should be formatted vertically (using 50% threshold)
+        if self.object_formatter.should_format_as_object(msg, available_width):
+            # Pass available width to formatter for smart nested formatting
+            if isinstance(msg, (list, tuple)):
+                formatted_result = self.object_formatter._format_sequence(msg, available_width)
+            elif isinstance(msg, dict):
+                formatted_result = self.object_formatter._format_dict(msg, available_width)
+            elif isinstance(msg, set):
+                formatted_result = self.object_formatter._format_set(msg, available_width)
+            else:
+                formatted_result = self.object_formatter.format_object(msg)
+
+            # Replace any remaining tabs with 2 spaces
+            return formatted_result.replace('\t', '  ')
+        else:
+            # Convert to string normally
+            return str(msg)
+
+    def _echo(self, msg: Any, m_type: str) -> None:
         """
         Internal method to process and display log messages.
 
         This method handles both console output with appropriate color formatting
-        and file writing if enabled.
+        and file writing if enabled. Automatically wraps long lines while maintaining
+        proper indentation.
 
         Parameters:
-            msg (str): The message content to log.
+            msg: The message content to log (can be string or any object).
             m_type (str): The message type/level (INFO, ERROR, WARN, INIT).
 
         Returns:
             None
         """
-        if self.write_to_file:
-            if self.prefix:
-                bare_log_string = f"[{self._make_timestamp_string()}]::[{self.prefix}]::{m_type}::{msg}\n"
-            else:
-                bare_log_string = f"[{self._make_timestamp_string()}]::{m_type}::{msg}\n"
+        # Process the message (convert objects to strings if needed)
+        processed_msg = self._process_message(msg)
 
-            log_file = self._open_log_file()
-            log_file.write(bare_log_string)
-            log_file.close()
+        # Handle file logging
+        if self.file_handler.write_to_file:
+            file_content = self.formatter.format_for_file(processed_msg, m_type)
+            self.file_handler.write_to_file_if_enabled(file_content)
 
-            self.log_list.append(bare_log_string)
-            self.log_list_to_send.append(bare_log_string)
+            self.log_list.append(file_content)
+            self.log_list_to_send.append(file_content)
 
-        if m_type == "INFO":
-            color_code = "blue bold"
-        elif m_type == "ERROR":
-            color_code = "red bold"
-        elif m_type == "WARN":
-            color_code = "yellow bold"
-        elif m_type == "INIT":
-            color_code = "purple bold"
-        else:
-            color_code = "white bold"
+        # Handle console output
+        console_prefix, plain_prefix, visual_prefix_length = self.formatter.format_for_console(m_type)
 
-        if self.prefix:
-            self.cls.print(
-                f"[gray][{self._make_timestamp_string()}][/][red bold]::[/][green bold][{self.prefix}][/][red bold]::[/][{color_code}]{m_type}[/][red bold]::[/]{msg}"
-            )
-        else:
-            self.cls.print(
-                f"[gray][{self._make_timestamp_string()}][/][red bold]::[/][{color_code}]{m_type}[/][red bold]::[/]{msg}"
-            )
+        # Get console width and calculate available space for message
+        console_width = self.cls.size.width
+        available_width = console_width - visual_prefix_length
 
-    def log(self, msg: str):
+        # Ensure we have reasonable minimum width
+        if available_width < 20:
+            available_width = 50
+
+        # Process message lines with wrapping
+        all_wrapped_lines = TextWrapper.process_message_lines(processed_msg, available_width)
+
+        # Print first line with full prefix
+        if all_wrapped_lines:
+            self.cls.print(f"{console_prefix}{all_wrapped_lines[0]}")
+
+            # Print subsequent lines with proper indentation
+            if len(all_wrapped_lines) > 1:
+                indent = " " * visual_prefix_length
+                for line in all_wrapped_lines[1:]:
+                    self.cls.print(f"{indent}{line}")
+
+    def log(self, msg: Any):
         """
         Logs an informational message.
 
         Parameters:
-            msg (str): The message to log.
+            msg: The message to log (can be string or any object).
 
         Returns:
             None
         """
         self._echo(msg, "INFO")
 
-    def error(self, msg: str):
+    def error(self, msg: Any):
         """
         Logs an error message.
 
         Parameters:
-            msg (str): The error message to log.
+            msg: The error message to log (can be string or any object).
 
         Returns:
             None
         """
         self._echo(msg, "ERROR")
 
-    def warn(self, msg: str):
+    def warn(self, msg: Any):
         """
         Logs a warning message.
 
         Parameters:
-            msg (str): The warning message to log.
+            msg: The warning message to log (can be string or any object).
 
         Returns:
             None
         """
         self._echo(msg, "WARN")
 
-    def init(self, msg: str):
+    def init(self, msg: Any):
         """
         Logs an initialization message.
 
         Parameters:
-            msg (str): The initialization message to log.
+            msg: The initialization message to log (can be string or any object).
 
         Returns:
             None
         """
         self._echo(msg, "INIT")
+
+    def add_to_batch(self, msg: str) -> None:
+        """
+        Add a message to the batch without immediately logging it.
+
+        Parameters:
+            msg (str): The message to add to the batch.
+
+        Returns:
+            None
+        """
+        self.batch.add_message(msg)
+
+    def flush_batch(self, m_type: str = "INFO") -> None:
+        """
+        Flush all batched messages as a single log entry.
+
+        Parameters:
+            m_type (str, optional): The message type for the batched output.
+                                   Defaults to "INFO".
+
+        Returns:
+            None
+        """
+        if not self.batch.is_empty():
+            batched_message = self.batch.get_batched_message()
+            self._echo(batched_message, m_type)
+            self.batch.clear()
+
+    def clear_batch(self) -> None:
+        """
+        Clear the batch without logging.
+
+        Returns:
+            None
+        """
+        self.batch.clear()
+
+    def batch_size(self) -> int:
+        """
+        Get the number of messages currently in the batch.
+
+        Returns:
+            int: Number of messages in the batch.
+        """
+        return self.batch.size()
 
     def flush_logs(self, from_start: bool = False) -> list:
         """
@@ -204,7 +265,7 @@ class Logger:
             list: A list of log message strings.
         """
         if from_start:
-            self.log_list_to_send = self.log_list
+            self.log_list_to_send = self.log_list.copy()
         log_list = self.log_list_to_send.copy()
         self.log_list_to_send = []
         return log_list

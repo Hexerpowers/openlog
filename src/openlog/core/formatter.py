@@ -57,10 +57,10 @@ class MessageFormatter:
         if self.prefix:
             # Format: [timestamp]::[prefix]::TYPE::
             plain_prefix = f"[{timestamp_str}]::[{self.prefix}]::{m_type}::"
-            console_prefix = f"[gray][{timestamp_str}][/][red bold]::[/][green bold][{self.prefix}][/][red bold]::[/][{color_code}]{m_type}[/][red bold]::[/]"
+            console_prefix = f"[steel_blue][{timestamp_str}][/][red bold]::[/][green bold][{self.prefix}][/][red bold]::[/][{color_code}]{m_type}[/][red bold]::[/]"
         else:
             # Format: [timestamp]::TYPE::
             plain_prefix = f"[{timestamp_str}]::{m_type}::"
-            console_prefix = f"[gray][{timestamp_str}][/][red bold]::[/][{color_code}]{m_type}[/][red bold]::[/]"
+            console_prefix = f"[steel_blue][{timestamp_str}][/][red bold]::[/][{color_code}]{m_type}[/][red bold]::[/]"
 
         return console_prefix, plain_prefix, len(plain_prefix)

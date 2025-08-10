@@ -1,5 +1,3 @@
-from tests.test_cli_log import logger
-
 # OpenLog Features Documentation
 
 This document provides detailed information about OpenLog's features and capabilities.
@@ -7,6 +5,7 @@ This document provides detailed information about OpenLog's features and capabil
 ## Table of Contents
 - [Core Logging Features](#core-logging-features)
 - [Batch Logging](#batch-logging)
+- [Task Managing](#task-managing)
 - [Object Formatting](#object-formatting)
 - [File Logging](#file-logging)
 - [Configuration Options](#configuration-options)
@@ -49,6 +48,35 @@ logger.flush_batch()
 
 # You can also use different log levels
 logger.flush_batch("ERROR")
+```
+
+## Task Managing
+
+```python
+task_logger = Logger()
+
+# Start a task with progress bar
+task_id = task_logger.add_task("Data processing")
+
+# Simulate work, while printing other logs!
+import time
+for i in range(10):
+    time.sleep(1)
+    task_logger.log("Other important logs...")
+
+# Complete the task
+task_logger.stop_task(task_id)
+
+# Start multiple tasks
+task1 = task_logger.add_task("Task 1")
+task2 = task_logger.add_task("Task 2")
+
+# Stop tasks individually
+task_logger.stop_task(task1)
+task_logger.stop_task(task2)
+
+# Or stop all at once
+task_logger.stop_all_tasks()
 ```
 
 ## Object Formatting

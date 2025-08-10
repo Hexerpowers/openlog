@@ -1,13 +1,13 @@
 # OpenLog
 
-A versatile Python logging utility designed to enhance logging capabilities with rich console output and optional file
-logging.
+A versatile Python logging utility (overengineered python-rich wrapping) designed to enhance logging capabilities with
+rich console output and optional file logging.
 
 ## Features
 
 - 🎨 **Rich Console Output**: Color-coded messages with beautiful formatting
 - 📁 **Flexible File Logging**: Optional file output with session support
-- 🔧 **Smart Object Formatting**: Intelligent vertical formatting for complex data structures
+- 🔧 **Task Management**: Progress-bars, special task logging etc.
 - 📊 **Multiple Log Levels**: INFO, ERROR, WARN, and INIT with distinct styling
 - 💾 **In-Memory Storage**: Retrieve and manage logs programmatically
 - 🎯 **Prefix Support**: Add context to your log messages
@@ -32,6 +32,7 @@ logger.error("Something went wrong")
 logger.warn("This is a warning")
 logger.init("System initialized")
 ```
+
 ### Batch Logging
 
 ```python
@@ -60,6 +61,30 @@ session_logger.log("Logged with timestamp in filename")
 dir_logger = Logger(in_dir=True, write_to_file=True)
 dir_logger.log("Logs stored in /logs directory")
 ```
+
+### Task Management
+
+OpenLog supports tracking long-running tasks with animated progress bars:
+
+```python
+logger = Logger()
+
+# Start a task with progress bar
+task_id = logger.add_task("Processing large dataset")
+
+# Your long-running code here
+# ...
+
+# Stop the task
+logger.stop_task(task_id)
+```
+
+#### Task Management Methods:
+
+- add_task(task_message) - Start a task with progress display
+- stop_task(task_id) - Stop a specific task
+- get_active_tasks() - Get all currently running tasks
+- stop_all_tasks() - Stop all active tasks (useful for cleanup)
 
 ### Smart Object Formatting
 
@@ -105,12 +130,26 @@ For detailed information about all features, configuration options, and advanced
 | `session`       | bool | False   | Create timestamped log files    |
 | `prefix`        | str  | ""      | Add prefix to all messages      |
 
-## Log Levels
+#### Log Levels and Methods
 
 - `log()` - General information (blue)
 - `error()` - Error messages (red)
 - `warn()` - Warning messages (yellow)
 - `init()` - Initialization messages (purple)
+
+#### Batch Operations
+
+- `add_to_batch()` - Add message to batch
+- `flush_batch()` - Output all batched messages
+- `clear_batch()` - Clear batch without output
+- `batch_size()` - Get number of messages in batch
+
+#### Task Management
+
+- `add_task()` - Start task with progress bar
+- `stop_task()` - Stop specific task
+- `get_active_tasks()` - Get active task information
+- `stop_all_tasks()` - Stop all tasks and cleanup
 
 ## Requirements
 

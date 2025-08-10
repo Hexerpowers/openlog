@@ -8,17 +8,27 @@ from .core.formatter import MessageFormatter
 from .core.object_formatter import ObjectFormatter
 from .core.text_wrapper import TextWrapper
 from .core.timestamp import TimestampManager
+from .core.task_manager import TaskManager
 
 
 class Logger:
     """
-    A versatile logging utility that provides console output with color formatting
-    and optional file logging capabilities.
+     A versatile logging utility that provides console output with color formatting
+     and optional file logging capabilities.
 
-    This logger uses Rich for console output with color formatting and can
-    simultaneously write logs to files. It supports different log levels
-    (INFO, ERROR, WARN, INIT) and can maintain logs in memory for later retrieval.
-    """
+     This logger uses Rich for console output with color formatting and can
+     simultaneously write logs to files. It supports different log levels
+     (INFO, ERROR, WARN, INIT), batch logging, task management with progress bars,
+     and can maintain logs in memory for later retrieval.
+
+     Features:
+     - Color-coded console output
+     - File logging with session support
+     - Batch message processing
+     - Long-running task tracking with progress bars
+     - In-memory log storage and retrieval
+     - Thread-safe operations
+     """
 
     def __init__(self, write_to_file: bool = False, in_dir: bool = False,
                  session: bool = False, prefix: str = "", short_timestamp: bool = False):
@@ -62,6 +72,9 @@ class Logger:
 
         # Batch functionality
         self.batch = MessageBatch()
+
+        # Task management
+        self.task_manager = TaskManager(self.cls)
 
     def _process_message(self, msg: Any) -> str:
         """
@@ -251,6 +264,72 @@ class Logger:
             int: Number of messages in the batch.
         """
         return self.batch.size()
+
+    def add_task(self, task_message: str) -> str:
+        """
+        Start a new long-running task with progress display.
+
+        Logs a start message and displays a progress bar at the bottom of the terminal.
+
+        Parameters:
+            task_message (str): Description of the task being started.
+
+        Returns:
+            str: Unique task ID for later reference when stopping the task.
+        """
+        # Log the task start
+        self.log(f"Started --> {task_message}")
+
+        # Start progress bar
+        task_id = self.task_manager.add_task(task_message)
+
+        return task_id
+
+    def stop_task(self, task_id: str) -> bool:
+        """
+        Stop a long-running task and remove its progress display.
+
+        Logs a completion message and removes the progress bar.
+
+        Parameters:
+            task_id (str): ID of the task to stop (returned by add_task).
+
+        Returns:
+            bool: True if task was found and stopped, False otherwise.
+        """
+        # Stop the task and get its message
+        task_message = self.task_manager.stop_task(task_id)
+
+        if task_message is not None:
+            # Log the task completion
+            self.log(f"Completed --> {task_message}")
+            return True
+
+        return False
+
+    def get_active_tasks(self) -> dict:
+        """
+        Get information about all currently active tasks.
+
+        Returns:
+            dict: Mapping of task IDs to task messages.
+        """
+        return self.task_manager.get_active_tasks()
+
+    def stop_all_tasks(self) -> None:
+        """
+        Stop all active tasks and cleanup progress displays.
+
+        This method is useful for cleanup when shutting down the logger.
+        """
+        active_tasks = self.task_manager.get_active_tasks()
+
+        # Log completion for all active tasks
+        for task_id, task_message in active_tasks.items():
+            self.log(f"Completed --> {task_message}")
+
+        # Stop all tasks
+        self.task_manager.stop_all_tasks()
 
     def flush_logs(self, from_start: bool = False) -> list:
         """
